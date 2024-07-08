@@ -1,0 +1,70 @@
+<!doctype html>
+
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>WebGPU Life</title>
+  </head>
+  <body>
+    <canvas width="512" height="512"></canvas>
+    <script type="module">
+      const canvas = document.querySelector("canvas");
+
+      // Your WebGPU code will begin here!
+
+      // check if the browser supports WebGPU
+      if(!navigator.gpu) {
+        throw new Error("WebGPU is not supported in your browser");
+      }
+
+      // check if GPU Adpater is found
+      const adapter = await navigator.gpu.requestAdapter();
+      if(!adapter) {
+        throw new Error("No appropriate GPU adapter found!");
+      }
+      
+      // request the GPU device, returns a promise
+      const device = await adapter.requestDevice();
+
+      // request a GPUCanvas context
+      const context = canvas.getContext("webgpu");
+
+      // Get canvas format that webGPU needs, because different devices == different preferences
+      const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+      context.configure({
+        device: device,
+        format: canvasFormat,
+      });
+
+
+      // CLEAR THE CANVAS
+      
+      // Create encoder, which records gpu commands
+      const encoder = device.createCommandEncoder();
+
+      //Create a render pass
+      const pass = encoder.beginRenderPass({
+        colorAttachments: [{
+          view: context.getCurrentTexture().createView(),
+          loadOp: "clear", // Clear when Render Pass starts
+          clearValue: { r: 0, g: 0, b: 0.5, a: 1 }, // can also be written as [0, 0, 0.5, 1]
+          storeOp: "store", // save results onto texture
+        }]
+      });
+
+      // End render pass
+      pass.end();
+
+      // create gpu command buffer
+      const commandBuffer = encoder.finish();
+
+      // Submit the command buffer to the GPU by queueing it.
+      device.queue.submit([commandBuffer]);
+
+      // These steps are sometimes collapsed into one:
+      // device.queue.submit([encoder.finish()]);
+
+
+    </script>
+  </body>
+</html>
