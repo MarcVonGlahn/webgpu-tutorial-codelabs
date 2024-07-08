@@ -13,16 +13,16 @@
       // Your WebGPU code will begin here!
 
       // check if the browser supports WebGPU
-      if(!navigator.gpu) {
+      if (!navigator.gpu) {
         throw new Error("WebGPU is not supported in your browser");
       }
 
       // check if GPU Adpater is found
       const adapter = await navigator.gpu.requestAdapter();
-      if(!adapter) {
+      if (!adapter) {
         throw new Error("No appropriate GPU adapter found!");
       }
-      
+
       // request the GPU device, returns a promise
       const device = await adapter.requestDevice();
 
@@ -37,8 +37,80 @@
       });
 
 
+      // #4 Draw Geometry
+
+      // Create Vertices Array - Index Buffer are out of scope for this
+      const vertices = new Float32Array([
+        -0.8, -0.8, // Triangle 1 (Blue)
+        0.8, -0.8,
+        0.8, 0.8,
+
+        -0.8, -0.8, // Triangle 2 (Red)
+        0.8, 0.8,
+        -0.8, 0.8,
+      ]);
+
+      // Create Vertex Buffer
+      const vertexBuffer = device.createBuffer({
+        label: "Cell vertices",
+        size: vertices.byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, // Specify usage as Vertex Buffer and also be able to copy stuff into it
+      });
+
+      //Change content of buffer
+      device.queue.writeBuffer(vertexBuffer, 0, vertices);
+
+      // Define Vertex Data structure
+      const vertexBufferLayout = {
+        arrayStride: 8,
+        attributes: [{
+          format: "float32x2",
+          offset: 0,
+          shaderLocation: 0, // Position, see vertex shader
+        }]
+      };
+
+      // Create Shader Module, containing both the vertex and the fragment shader
+      const cellShaderModule = device.createShaderModule({
+          label: 'Cell shader',
+          code: `
+    @vertex
+    fn vertexMain(@location(0) pos: vec2f) ->
+      @builtin(position) vec4f {
+      return vec4f(pos, 0, 1);
+    }
+
+    @fragment
+    fn fragmentMain() -> @location(0) vec4f {
+      return vec4f(1, 0, 0, 1);
+    }
+  `
+        });
+
+      // Create a render Pipeline
+      // There are a lot more options to create the render pipeline.
+      // Explaination in #4
+      const cellPipeline = device.createRenderPipeline({
+        label: "Cell pipeline",
+        layout: "auto",
+        vertex: {
+          module: cellShaderModule,
+          entryPoint: "vertexMain",
+          buffers: [vertexBufferLayout]
+        },
+        fragment: {
+          module: cellShaderModule,
+          entryPoint: "fragmentMain",
+          targets: [{
+            format: canvasFormat
+          }]
+        }
+      });
+
+
+
       // CLEAR THE CANVAS
-      
+
       // Create encoder, which records gpu commands
       const encoder = device.createCommandEncoder();
 
@@ -51,6 +123,12 @@
           storeOp: "store", // save results onto texture
         }]
       });
+
+
+      // Draw the square
+      pass.setPipeline(cellPipeline);
+      pass.setVertexBuffer(0, vertexBuffer);
+      pass.draw(vertices.length / 2); // 6 vertices
 
       // End render pass
       pass.end();
@@ -67,4 +145,5 @@
 
     </script>
   </body>
-</html>
+  
+  </html>
