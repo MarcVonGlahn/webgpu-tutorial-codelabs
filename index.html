@@ -87,18 +87,32 @@
       const cellStateArray = new Uint32Array(GRID_SIZE * GRID_SIZE);
 
       //Create storage buffer
-      const cellStateStorageBuffer = device.createBuffer({
-        label: "Cell State",
+      const cellStateStorageBuffer = [
+        device.createBuffer({
+        label: "Cell State A",
         size: cellStateArray.byteLength,
         usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-      });
+        }),
+        device.createBuffer({
+        label: "Cell State B",
+        size: cellStateArray.byteLength,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        })
+      ];
 
-      // Populate buffer with isActive states of cells
-      for(let i = 0; i < cellStateArray.length; i+=3)
-      {
+      // Populate buffer A with isActive states of cells
+      for (let i = 0; i < cellStateArray.length; i += 3) {
         cellStateArray[i] = 1;
       }
-      device.queue.writeBuffer(cellStateStorageBuffer, 0, cellStateArray);
+
+      device.queue.writeBuffer(cellStateStorageBuffer[0], 0, cellStateArray);
+
+      // Populate buffer B with isActive states of cells
+      for(let i = 0; i < cellStateArray.length; i++) {
+          cellStateArray[i] = i % 2;
+      }
+
+      device.queue.writeBuffer(cellStateStorageBuffer[1], 0, cellStateArray);
 
 
 
@@ -174,57 +188,79 @@
       });
 
 
-      const bindGroup = device.createBindGroup({
-        label: "Cell renderer bind group",
-        layout: cellPipeline.getBindGroupLayout(0),
-        entries: [{
-          binding: 0,
-          resource: { buffer: uniformBuffer }
-        },
-        {
-          binding: 1,
-          resource: { buffer : cellStateStorageBuffer }
-        }],
-      });
+      const bindGroup = [
+        device.createBindGroup({
+          label: "Cell renderer bind group A",
+          layout: cellPipeline.getBindGroupLayout(0),
+          entries: [{
+            binding: 0,
+            resource: { buffer: uniformBuffer }
+          },
+          {
+            binding: 1,
+            resource: { buffer : cellStateStorageBuffer[0] }
+          }],
+        }),
+        device.createBindGroup({
+          label: "Cell renderer bind group B",
+          layout: cellPipeline.getBindGroupLayout(0),
+          entries: [{
+            binding: 0,
+            resource: { buffer: uniformBuffer }
+          },
+          {
+            binding: 1,
+            resource: { buffer : cellStateStorageBuffer[1] }
+          }],
+        })
+      ];
 
 
-      // CLEAR THE CANVAS
+      
 
-      // Create encoder, which records gpu commands
-      const encoder = device.createCommandEncoder();
+      // Render loop setup
+      const UPDATE_INTERVAL = 200; // 200 ms
+      let step = 0; // Tracker
 
-      //Create a render pass
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: context.getCurrentTexture().createView(),
-          loadOp: "clear", // Clear when Render Pass starts
-          clearValue: { r: 0, g: 0, b: 0.5, a: 1 }, // can also be written as [0, 0, 0.5, 1]
-          storeOp: "store", // save results onto texture
-        }]
-      });
+      function updateGrid() {
+        step++;
 
+        // CLEAR THE CANVAS
 
-      // Draw the square
-      pass.setPipeline(cellPipeline);
-      pass.setVertexBuffer(0, vertexBuffer);
+        // Create encoder, which records gpu commands
+        const encoder = device.createCommandEncoder();
 
-      pass.setBindGroup(0, bindGroup);
+        //Create a render pass
+        const pass = encoder.beginRenderPass({
+          colorAttachments: [{
+            view: context.getCurrentTexture().createView(),
+            loadOp: "clear", // Clear when Render Pass starts
+            clearValue: { r: 0, g: 0, b: 0.5, a: 1 }, // can also be written as [0, 0, 0.5, 1]
+            storeOp: "store", // save results onto texture
+          }]
+        });
 
-       // Instancing!
-      pass.draw(vertices.length / 2, GRID_SIZE * GRID_SIZE);
+        // Draw the square
+        pass.setPipeline(cellPipeline);
+        pass.setVertexBuffer(0, vertexBuffer);
 
-      // End render pass
-      pass.end();
+        pass.setBindGroup(0, bindGroup[step % 2]);
 
-      // create gpu command buffer
-      const commandBuffer = encoder.finish();
+        // Instancing!
+        pass.draw(vertices.length / 2, GRID_SIZE * GRID_SIZE);
 
-      // Submit the command buffer to the GPU by queueing it.
-      device.queue.submit([commandBuffer]);
+        // End render pass
+        pass.end();
 
-      // These steps are sometimes collapsed into one:
-      // device.queue.submit([encoder.finish()]);
+        // create gpu command buffer
+        const commandBuffer = encoder.finish();
+        // Submit the command buffer to the GPU by queueing it.
+        device.queue.submit([commandBuffer]);
 
+      }
+
+      // Schedule to run updateGrid repeatedly
+      setInterval(updateGrid, UPDATE_INTERVAL);
 
     </script>
   </body>
